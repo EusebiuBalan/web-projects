@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <title>Conway</title>
+    <style>
+      * {
+        margin: 0;
+        border: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      canvas {
+        position: relative;
+        margin: 10px 20px;
+      }
+
+      button {
+        padding: 5px 20px;
+        cursor: pointer;
+        border-radius: 5px;
+        border: 1px solid #fff
+      }
+
+      button:hover {
+        border: 1px solid #ccc;
+      }
+
+      .container,
+      .input-container {
+        padding: 10px 20px;
+        display: inline;
+      }
+
+      .container {
+        display: block;
+        margin-top: 10px;
+      }
+
+    </style>
+  </head>
+
+  <body>
+    <canvas id="main"></canvas>
+    <form action="">
+      <div class="input-container">
+        <button type="button" id="reset">Reset</button>
+      </div>
+      <div class="input-container">
+        <button type="button" id="next">Next</button>
+      </div>
+      <div class="input-container">
+        <button type="button" id="start">Start</button>
+      </div>
+    </form>
+    <div class="container">
+      <span>Iteration: <strong id="iteration-number">0</strong></span>
+    </div>
+  </body>
+  <script>
+    class Model {
+      constructor(size) {
+        this.size = size
+        this.iteration = 0
+        this.init()
+      }
+      setSize(size) {
+        this.size = size
+      }
+      getSize() {
+        return this.size
+      }
+      init() {
+        this.universe = Array.from({
+          length: this.size
+        }, () => {
+          return Array.from({
+            length: this.size
+          }, () => false)
+        })
+      }
+      printUniverse() {
+        this.universe.forEach(line => console.log(line))
+      }
+      turnCell(x, y) {
+        if (x > this.size - 1 || y > this.size - 1) {
+          throw new Error('Coordinates out of bound')
+        }
+        this.universe[x][y] = !this.universe[x][y]
+      }
+
+      getCell(x, y) {
+        if (this.universe[x] !== undefined && this.universe[x][y] !== undefined) {
+          return this.universe[x][y]
+        }
+        return null
+      }
+      getNeighbours(x, y) {
+        return [
+          this.getCell(x - 1, y),
+          this.getCell(x + 1, y),
+          this.getCell(x, y - 1),
+          this.getCell(x, y + 1),
+          this.getCell(x - 1, y - 1),
+          this.getCell(x + 1, y + 1),
+          this.getCell(x - 1, y + 1),
+          this.getCell(x + 1, y - 1),
+        ]
+      }
+      /**
+       * Run iteration
+       **/
+      tick() {
+        const that = this
+        const copy = JSON.parse(JSON.stringify(this.universe))
+        this.universe.forEach((line, x) => {
+          line.forEach((cell, y) => {
+            const neightbours = that.getNeighbours(x, y)
+            const liveNeighbours = (neightbours.filter(cell => cell === true)).length
+            if (that.getCell(x, y) === true && !(liveNeighbours === 2 || liveNeighbours === 3)) {
+              copy[x][y] = !copy[x][y]
+            } else if (that.getCell(x, y) === false && liveNeighbours === 3) {
+              copy[x][y] = !copy[x][y]
+            }
+          })
+        })
+        this.universe = copy
+        this.iteration++
+      }
+      getData() {
+        return this.universe
+      }
+      getIteration() {
+        return this.iteration
+      }
+      reset() {
+        this.init()
+        this.iteration = 0
+      }
+    }
+
+    class View {
+      constructor(model, canvasElement, iterationElement) {
+        this.canvas = canvasElement
+        this.iterationElement = iterationElement
+        this.model = model
+        this.lines = model.getSize()
+        this.ctx = canvasElement.getContext("2d")
+        this.init()
+        this.drawGrid()
+      }
+      init() {
+        this.canvas.width = 600
+        this.canvas.height = 400
+      }
+      setWidth(width) {
+        this.canvas.width = width
+      }
+      setHeight(height) {
+        this.canvas.height = height
+      }
+
+      drawLine(x1, y1, x2, y2) {
+        this.ctx.beginPath();
+        this.ctx.moveTo(x1, y1);
+        this.ctx.lineTo(x2, y2);
+        this.ctx.stroke();
+      }
+      drawGrid() {
+        // draw vertical
+        Array.from({
+          length: this.lines + 1
+        }, (v, i) => {
+          return (this.canvas.width / this.lines) * i
+        }).map(x => {
+          this.drawLine(x, 0, x, this.canvas.height)
+        })
+        // draw horizontal
+        Array.from({
+          length: this.lines + 1
+        }, (v, i) => {
+          return (this.canvas.height / this.lines) * i
+        }).map(y => {
+          this.drawLine(0, y, this.canvas.width, y)
+        })
+      }
+      getCellFromCanvasCoord(canvasX, canvasY) {
+        const cellWidth = parseInt(this.canvas.width / this.lines)
+        const cellHeight = parseInt(this.canvas.height / this.lines)
+        return {
+          x: parseInt(canvasX / cellWidth),
+          y: parseInt(canvasY / cellHeight)
+        }
+      }
+      getCanvasCoordFromCell(cellX, cellY) {
+        const cellWidth = parseInt(this.canvas.width / this.lines)
+        const cellHeight = parseInt(this.canvas.height / this.lines)
+        return {
+          x: parseInt(cellX * cellWidth),
+          y: parseInt(cellY * cellHeight)
+        }
+      }
+      draw() {
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height)
+        this.model.getData().forEach((line, cellX) => {
+          line.forEach((item, cellY) => {
+            const canvasCoord = this.getCanvasCoordFromCell(cellX, cellY)
+            const cellWidth = parseInt(this.canvas.width / this.lines)
+            const cellHeight = parseInt(this.canvas.height / this.lines)
+
+            if (item === true) {
+              this.ctx.fillStyle = "#9966ff";
+              this.ctx.fillRect(canvasCoord.x, canvasCoord.y, cellWidth, cellHeight);
+            } else {
+              this.ctx.fillStyle = "#ffffff";
+              this.ctx.fillRect(canvasCoord.x, canvasCoord.y, cellWidth, cellHeight);
+            }
+          })
+        })
+        this.drawGrid()
+        this.iterationElement.innerHTML = this.model.getIteration()
+      }
+    }
+
+    const canvas = document.getElementById('main')
+    const iteration = document.getElementById('iteration-number')
+    const canvasLeft = canvas.offsetLeft + canvas.clientLeft
+    const canvasTop = canvas.offsetTop + canvas.clientTop
+
+    const range = document.getElementById('range')
+    const reset = document.getElementById('reset')
+    const next = document.getElementById('next')
+    const start = document.getElementById('start')
+    let intervalId = null
+
+    const model = new Model(20)
+    const view = new View(model, canvas, iteration)
+
+
+    canvas.addEventListener('click', function(event) {
+      const x = event.pageX - canvasLeft
+      const y = event.pageY - canvasTop
+      const cell = view.getCellFromCanvasCoord(x, y)
+      model.turnCell(cell.x, cell.y)
+      view.draw()
+    })
+
+    reset.addEventListener('click', function(event) {
+      model.reset()
+      view.draw()
+      clearInterval(intervalId)
+      intervalId = null
+      start.innerHTML = "Start"
+    })
+
+    next.addEventListener('click', function(event) {
+      model.tick()
+      view.draw()
+    })
+
+    start.addEventListener('click', function(event) {
+      if (intervalId === null) {
+        intervalId = setInterval(function() {
+          model.tick()
+          view.draw()
+        }, 100)
+        start.innerHTML = "Stop"
+      } else {
+        clearInterval(intervalId)
+        intervalId = null
+        start.innerHTML = "Start"
+      }
+    })
+  </script>
+</html>
+
+
